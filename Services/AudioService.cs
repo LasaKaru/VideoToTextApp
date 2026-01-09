@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Threading.Tasks;
 using Xabe.FFmpeg;
 
@@ -8,32 +9,41 @@ namespace VideoToTextApp.Services
     {
         public AudioService()
         {
-            // Point Xabe.FFmpeg to the folder where you will put ffmpeg.exe
-            // We assume it's in a folder named "ffmpeg" inside the app directory
+            // Point Xabe.FFmpeg to the folder where you put ffmpeg.exe
             string ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg");
             FFmpeg.SetExecutablesPath(ffmpegPath);
         }
 
         public async Task<string> ExtractAudioAsync(string videoPath)
         {
-            // Create a temporary output path for the WAV file
             string outputWavPath = Path.ChangeExtension(videoPath, ".wav");
 
-            // If it already exists, delete it to avoid errors
             if (File.Exists(outputWavPath))
                 File.Delete(outputWavPath);
 
-            // Extract audio: Force 16kHz mono (Required by Whisper)
-            var conversion = await FFmpeg.Conversions.FromSnippet.ExtractAudio(videoPath, outputWavPath);
+            // Get media info
+            var mediaInfo = await FFmpeg.GetMediaInfo(videoPath);
 
-            // Xabe might not set 16khz/mono by default on simple extraction, 
-            // but Whisper.net handles some resampling. ideally, use FFmpeg args for strict 16kHz:
-            // -ar 16000 -ac 1 -c:a pcm_s16le
+            // FIX: Use .AddParameter to manually pass standard FFmpeg arguments
+            // -vn : No Video
+            // -ac 1 : Audio Channels 1 (Mono)
+            // -ar 16000 : Audio Rate 16000Hz (Required by Whisper)
+            // -c:a pcm_s16le : Codec PCM 16-bit Little Endian (Standard WAV)
+
+            var conversion = FFmpeg.Conversions.New()
+                .AddStream(mediaInfo.AudioStreams)
+                .SetOutput(outputWavPath)
+                .AddParameter("-vn -ac 1 -ar 16000 -c:a pcm_s16le");
 
             await conversion.Start();
 
-
             return outputWavPath;
+        }
+
+        public async Task<TimeSpan> GetVideoDuration(string videoPath)
+        {
+            var info = await FFmpeg.GetMediaInfo(videoPath);
+            return info.Duration;
         }
     }
 }

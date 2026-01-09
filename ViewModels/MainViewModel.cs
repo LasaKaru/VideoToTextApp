@@ -1,5 +1,7 @@
 ﻿using Microsoft.Win32;
+using System;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
@@ -15,16 +17,21 @@ namespace VideoToTextApp.ViewModels
 
         private string _transcript;
         private string _status;
+        private double _progressValue; // 0 to 100
         private bool _isBusy;
 
         public MainViewModel()
         {
             _audioService = new AudioService();
             _whisperService = new WhisperService();
+
             SelectVideoCommand = new RelayCommand(async (o) => await ProcessVideo());
+            SaveScriptCommand = new RelayCommand(SaveScript, (o) => !string.IsNullOrEmpty(Transcript));
+
             Status = "Ready to start.";
         }
 
+        // --- Properties ---
         public string Transcript
         {
             get => _transcript;
@@ -37,64 +44,91 @@ namespace VideoToTextApp.ViewModels
             set { _status = value; OnPropertyChanged(); }
         }
 
-        // Disables button while processing
+        public double ProgressValue
+        {
+            get => _progressValue;
+            set { _progressValue = value; OnPropertyChanged(); }
+        }
+
         public bool IsBusy
         {
             get => _isBusy;
-            set { _isBusy = value; OnPropertyChanged(); } // You can bind Button.IsEnabled to !IsBusy
+            set { _isBusy = value; OnPropertyChanged(); }
         }
 
+        // --- Commands ---
         public ICommand SelectVideoCommand { get; }
+        public ICommand SaveScriptCommand { get; }
 
+        // --- Logic ---
         private async Task ProcessVideo()
         {
-            var openFileDialog = new OpenFileDialog
-            {
-                Filter = "Video Files|*.mp4;*.mkv;*.avi|All Files|*.*"
-            };
+            var openDialog = new OpenFileDialog { Filter = "Video Files|*.mp4;*.mkv;*.avi;*.mov" };
+            if (openDialog.ShowDialog() != true) return;
 
-            if (openFileDialog.ShowDialog() == true)
+            try
             {
                 IsBusy = true;
-                Transcript = ""; // Clear previous
-                Status = "Extracting audio...";
+                Transcript = "";
+                ProgressValue = 0;
+                string videoPath = openDialog.FileName;
 
-                try
+                // 1. Get Duration for Progress Calculation
+                Status = "Analyzing video...";
+                var duration = await _audioService.GetVideoDuration(videoPath);
+
+                // 2. Extract Audio
+                Status = "Extracting audio (please wait)...";
+                string audioPath = await _audioService.ExtractAudioAsync(videoPath);
+
+                // 3. Transcribe with Progress
+                Status = "Transcribing...";
+
+                // We create a simpler progress handler here
+                var progressReporter = new Progress<string>(segmentText =>
                 {
-                    string videoPath = openFileDialog.FileName;
+                    // Whisper returns segments incrementally. 
+                    // We append to the text box immediately.
+                    Transcript += segmentText + Environment.NewLine;
 
-                    // 1. Extract Audio
-                    string audioPath = await _audioService.ExtractAudioAsync(videoPath);
+                    // Simple progress estimation:
+                    // If you want precise percentage, you need to change WhisperService to report TimeStamp
+                    // For now, let's just show indeterminate activity or update text.
+                });
 
-                    Status = "Transcribing (This may take a while)...";
+                await _whisperService.TranscribeAsync(audioPath, progressReporter);
 
-                    // 2. Transcribe
-                    // Create a progress reporter to update UI in real-time
-                    var progress = new Progress<string>(line =>
-                    {
-                        Transcript += line + "\n";
-                    });
+                Status = "Done!";
+                ProgressValue = 100;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+                Status = "Error occurred.";
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
 
-                    await _whisperService.TranscribeAsync(audioPath, progress);
+        private void SaveScript(object obj)
+        {
+            var saveDialog = new SaveFileDialog
+            {
+                Filter = "Text File|*.txt|Subtitle File|*.srt",
+                FileName = "Transcript"
+            };
 
-                    Status = "Done! Transcript saved or ready to copy.";
-                }
-                catch (System.Exception ex)
-                {
-                    MessageBox.Show($"Error: {ex.Message}");
-                    Status = "Failed.";
-                }
-                finally
-                {
-                    IsBusy = false;
-                }
+            if (saveDialog.ShowDialog() == true)
+            {
+                File.WriteAllText(saveDialog.FileName, Transcript);
+                Status = "File Saved.";
             }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string name = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-        }
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }

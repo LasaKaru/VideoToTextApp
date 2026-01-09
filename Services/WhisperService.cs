@@ -10,13 +10,13 @@ namespace VideoToTextApp.Services
     public class WhisperService
     {
         // We look for the model in a "models" folder next to the .exe
-        private readonly string _modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "ggml-large-v3.bin");
+        private readonly string _modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "ggml-small.en.bin");
 
         public async Task<string> TranscribeAsync(string audioPath, IProgress<string> progress)
         {
             if (!File.Exists(_modelPath))
             {
-                throw new FileNotFoundException($"Model not found at: {_modelPath}. Please download ggml-large-v3.bin.");
+                throw new FileNotFoundException($"Model not found at: {_modelPath}. Please download ggml-small.en.bin.");
             }
 
             using var factory = WhisperFactory.FromPath(_modelPath);

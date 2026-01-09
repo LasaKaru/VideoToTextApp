@@ -5,36 +5,54 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:VideoToTextApp.ViewModels"
         mc:Ignorable="d"
-        Title="Offline Video Transcriber" Height="450" Width="800">
+        Title="Offline Video Transcriber" Height="500" Width="800"
+        WindowStartupLocation="CenterScreen">
 
     <Window.DataContext>
         <vm:MainViewModel />
     </Window.DataContext>
 
-    <Grid Margin="10">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
+
+    <Grid Margin="15">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,10">
-            <Button Content="Select Video" 
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+            <Button Content="📁 Select Video" 
                     Command="{Binding SelectVideoCommand}" 
-                    Padding="10,5" 
-                    Margin="0,0,10,0"/>
-            <TextBlock Text="{Binding Status}" 
-                       VerticalAlignment="Center" 
-                       FontWeight="Bold"
-                       Foreground="#555"/>
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Inverse}" 
+                    Width="120" Height="30" Margin="0,0,10,0"/>
+
+            <Button Content="💾 Save Script" 
+                    Command="{Binding SaveScriptCommand}" 
+                    Width="120" Height="30"/>
         </StackPanel>
+
+        <ProgressBar Grid.Row="1" Height="10" Margin="0,0,0,10"
+                     IsIndeterminate="{Binding IsBusy}" 
+                     Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
         <TextBox Grid.Row="2" 
                  Text="{Binding Transcript}" 
                  IsReadOnly="True" 
-                 VerticalScrollBarVisibility="Auto"
+                 TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Visible"
                  AcceptsReturn="True"
                  FontSize="14"
-                 Padding="5"/>
+                 FontFamily="Consolas"
+                 Padding="10"/>
+
+        <TextBlock Grid.Row="3" 
+                   Text="{Binding Status}" 
+                   Margin="0,5,0,0" 
+                   Foreground="#666" 
+                   FontStyle="Italic"/>
     </Grid>
 </Window>
